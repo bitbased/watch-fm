@@ -156,7 +156,6 @@ static void in_received_handler(DictionaryIterator *received, void *context) {
   if (!!value && value->key == KEY_DURATION)
   {
     duration = value->value->uint32;
-    elapsed = 0;
   }
 
   //Tuple *value3;
