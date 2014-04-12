@@ -1,0 +1,45 @@
+{
+  "uuid": "eb528d26-404f-4725-a832-ec9a80272f99",
+  "shortName": "watch-fm",
+  "longName": "watch-fm",
+  "capabilities": ["configurable"],
+  "companyName": "bitbased.net",
+  "versionCode": 1,
+  "versionLabel": "1.0.0",
+  "watchapp": {
+    "watchface": true
+  },
+  "appKeys": {
+    "dummy": 0,
+    "action": 1,
+    "title": 2,
+    "artist": 3,
+    "album": 4,
+    "status": 5,
+    "volume": 6,
+    "changed": 7,
+    "row_index": 8,
+    "row_data": 9,
+    "duration": 10
+  },
+  "resources": {
+    "media": [
+        {
+          "type": "png",
+          "name": "ICON_LASTFM",
+          "menuIcon": true,
+          "file": "images/lastfm-icon.fw.png"
+        },
+        {
+          "type": "png",
+          "name": "TINY_LASTFM",
+          "file": "images/lastfm-tiny.fw.png"
+        },
+        {
+          "type": "png",
+          "name": "BIG_LASTFM",
+          "file": "images/lastfm-big.png"
+        }
+      ]
+  }
+}
