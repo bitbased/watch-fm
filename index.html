@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Watch-fm by bitbased</title>
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    <script src="javascripts/respond.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <!--[if lt IE 8]>
+    <link rel="stylesheet" href="stylesheets/ie.css">
+    <![endif]-->
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+  </head>
+  <body>
+      <div id="header">
+        <nav>
+          <li class="fork"><a href="https://github.com/bitbased/watch-fm">View On GitHub</a></li>
+          <li class="downloads"><a href="https://github.com/bitbased/watch-fm/zipball/master">ZIP</a></li>
+          <li class="downloads"><a href="https://github.com/bitbased/watch-fm/tarball/master">TAR</a></li>
+          <li class="title">DOWNLOADS</li>
+        </nav>
+      </div><!-- end header -->
+
+    <div class="wrapper">
+
+      <section>
+        <div id="title">
+          <h1>Watch-fm</h1>
+          <p>last.fm pebble watchface</p>
+          <hr>
+          <span class="credits left">Project maintained by <a href="https://github.com/bitbased">bitbased</a></span>
+          <span class="credits right">Hosted on GitHub Pages &mdash; Theme by <a href="https://twitter.com/michigangraham">mattgraham</a></span>
+        </div>
+
+        <h1>
+<a name="watch-fm-pebble-watch-face" class="anchor" href="#watch-fm-pebble-watch-face"><span class="octicon octicon-link"></span></a>watch-fm Pebble Watch Face</h1>
+
+<p>A last.fm album art watchface for the pebble smart watch. Watches your last.fm recently played stream and updates current track and album art.</p>
+
+<h2>
+<a name="build-instructions" class="anchor" href="#build-instructions"><span class="octicon octicon-link"></span></a>Build Instructions</h2>
+
+<p>Clone this repository in an appropriate directory:</p>
+
+<pre><code>git clone https://github.com/bitbased/watch-fm.git
+</code></pre>
+
+<p>Prerequisites:</p>
+
+<p>This project uses coffeescript for cleaner JS code. <code>wscript</code> has been modified to concatenate all js resources into <code>pebble-js-app.js</code> with <code>.js</code> resources above <code>.coffee</code> resources.</p>
+
+<pre><code>pip install CoffeeScript
+</code></pre>
+
+<p>Build:</p>
+
+<pre><code>pebble build
+</code></pre>
+
+<p>Install:</p>
+
+<pre><code>pebble install --phone [phone ip here]
+</code></pre>
+
+<h2>
+<a name="license" class="anchor" href="#license"><span class="octicon octicon-link"></span></a>License</h2>
+
+<p>Copyright (C) 2014 Brant Wedel</p>
+
+<p>This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.</p>
+
+<p>This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.</p>
+
+<p>You should have received a copy of the GNU General Public License along with this program; if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.</p>
+
+<p>You may contact the author at <a href="mailto:brant@bitbased.net">brant@bitbased.net</a></p>
+      </section>
+
+    </div>
+    <!--[if !IE]><script>fixScale(document);</script><![endif]-->
+    
+  </body>
+</html>
