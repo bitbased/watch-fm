@@ -15,7 +15,7 @@ window.getUpdateRate = ->
   rate = window.localStorage.getItem("lastfm.rate")
 
   if window.getUsername() == ""
-    rate = 45
+    rate = 300
   else
     return 10 unless window.last_duration
     tm = (new Date() - window.last_play) / 1000
@@ -177,9 +177,13 @@ window.updateTrack = (data) ->
     window.waiting = false
   , -> window.waiting = false
 
+  req = "http://ws.audioscrobbler.com/2.0/?method=track.getinfo&api_key=#{SecretConfig.lastfm_api_key}&mbid=#{data.currentTrack.mbid}&format=json"
+  if data.currentTrack.mbid == ""
+    req = "http://ws.audioscrobbler.com/2.0/?method=track.getinfo&api_key=#{SecretConfig.lastfm_api_key}&artist=#{data.currentTrack.artist}&track=#{data.currentTrack.title}&format=json"
+  console.log req
   $.ajax
     cache: false
-    url: "http://ws.audioscrobbler.com/2.0/?method=track.getinfo&api_key=#{SecretConfig.lastfm_api_key}&mbid=#{data.currentTrack.mbid}&format=json"
+    url: req
     success: (response) ->
       image_url = ""
       console.log("LOG:" + image_url)
@@ -194,8 +198,11 @@ window.updateTrack = (data) ->
         window.last_duration = response.track.duration / 1000
         Pebble.sendAppMessage {"duration": parseInt(response.track.duration / 1000)}, ->
           console.log ("DURATION_SUCCESS")
-        , ->
+        , =>
           console.log ("DURATION_TIMEOUT")
+          Pebble.sendAppMessage {"duration": parseInt(response.track.duration / 1000)}, ->
+            console.log ("DURATION_RETRY_SUCCESS")
+
       else
         window.last_duration = -(response.track.duration / 1000)
       window.updateimage(image_url)
@@ -216,6 +223,7 @@ mainLoop = ->
 
 
   if window.getUsername() == ""
+    console.log "http://ws.audioscrobbler.com/2.0/?method=chart.gettoptracks&api_key=#{SecretConfig.lastfm_api_key}&format=json"
     $.ajax
       url: "http://ws.audioscrobbler.com/2.0/?method=chart.gettoptracks&api_key=#{SecretConfig.lastfm_api_key}&format=json"
       cache: false
@@ -227,6 +235,7 @@ mainLoop = ->
         console.log r
         artist = data.tracks.track[r].artist["name"]
         album = ""
+        mbid = data.tracks.track[r].mbid
         title = data.tracks.track[r].name
         image_url = null
         if data.tracks.track[r] && data.tracks.track[r].image
@@ -238,11 +247,12 @@ mainLoop = ->
         else
           window.interval_count = window.getUpdateRate() - 10
         console.log(artist + " - " + title + " - " + image_url)
-        window.updateTrack({currentTrack: {artist, album, title, image_url, duration: 0 } })
+        window.updateTrack({currentTrack: {artist, album, title, image_url, mbid } })
       error: (err,error,text) ->
         window.interval_count = 0
         console.log error
   else
+    console.log "http://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=#{window.getUsername()}&limit=1&api_key=#{SecretConfig.lastfm_api_key}&format=json"
     $.ajax
       url: "http://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=#{window.getUsername()}&limit=1&api_key=#{SecretConfig.lastfm_api_key}&format=json"
       cache: false
@@ -250,18 +260,20 @@ mainLoop = ->
       success: (data) ->
         window.interval_count = 0
         return unless data.recenttracks
-        artist = data.recenttracks.track[0].artist["#text"]
-        album = data.recenttracks.track[0].album["#text"]
-        mbid = data.recenttracks.track[0].mbid
-        title = data.recenttracks.track[0].name
+        track = data.recenttracks.track[0]
+        track = data.recenttracks.track if track == undefined
+        artist = track.artist["#text"]
+        album = track.album["#text"]
+        mbid = track.mbid
+        title = track.name
         image_url = null
-        if data.recenttracks.track[0]
-          for img in data.recenttracks.track[0].image
+        if track
+          for img in track.image
             if img.size == "large" && !image_url
               image_url = img["#text"]
             if img.size == "extralarge"
               image_url = img["#text"]
-        console.log(artist + " - " + title + " - " + image_url)
+        console.log(artist + " - " + title + " - " + image_url + " ! " + mbid)
         window.updateTrack({currentTrack: {artist, album, title, image_url, mbid} })
       error: (err,error,text) ->
         window.interval_count = 0
@@ -287,34 +299,26 @@ queue = ->
 
 
 Pebble.addEventListener "webviewclosed", (e) ->
-  params = e.response.split("&")
-  param = params[0].split("=")
-  console.log params[0]
-  if(param[0] == "lastfm_username")
-    console.log param[0]
-    console.log param[1]
-    window.setUsername(param[1])
-
-  param = params[1].split("=")
-  if(param[0] == "lastfm_rate")
-    console.log param[0]
-    console.log param[1]
-    window.setUpdateRate(parseInt(param[1]))
-
+  data = JSON.parse(e.response)
+  window.setUsername(data.lastfm_username)
   window.interval_count == window.getUpdateRate() - 1;
 
 Pebble.addEventListener "showConfiguration", (e) ->
   page = """<html>
   <head>
-
+    <script>
+      function submit()
+      {
+        data = { lastfm_username: document.getElementById('lastfm_username').value };
+        window.location.href='pebblejs://close#' + encodeURIComponent(JSON.stringify(data));
+      }
+    </script>
   </head>
   <body>
     <h1>Last.fm account</h1>
     Username: <input type="text" id="lastfm_username" value="#{window.getUsername()}">
     <br>
-    Realtime: <input type="checkbox" id="lastfm_rate" #{if window.getRawUpdateRate() <= 2 then 'checked="checked"' else ""}>
-    <br>
-    <button onClick="window.location.href='pebblejs://close#lastfm_username='+document.getElementById('lastfm_username').value+'&lastfm_rate='+(document.getElementById('lastfm_rate').checked ? 2 : 10);" value="Save">
+    <button onClick="submit()" value="Save">
       Save
     </button>
   </body>
@@ -323,7 +327,7 @@ Pebble.addEventListener "showConfiguration", (e) ->
 
 Pebble.addEventListener "ready", (e) ->
   console.log("JavaScript app ready and running!")
-  window.interval_count == window.getUpdateRate() - 5;
+  window.interval_count = window.getUpdateRate() - 5;
   mainLoop()
   setInterval(mainLoop, 1000)
   setInterval(queue,80)

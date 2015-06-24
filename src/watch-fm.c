@@ -46,6 +46,7 @@ static const GBitmap album_art_bitmap = {
 static int timer_left = 0;
 static bool fade_state = true;
 static void timer_callback(void *context) {
+  return;
   const uint32_t timeout_ms = 250;
   if (timer_left > 0) {
     timer_left -= timeout_ms;
@@ -89,9 +90,7 @@ static void update_progress()
   if(duration)
   {
     tm = ((double)144.0 / (double)duration)*(double)elapsed;
-    if (elapsed < duration + 60)
-      elapsed++;
-    else
+    if (elapsed > duration + 60)
       tm = 0;
   }
   layer_set_frame(inverter_layer_get_layer(progress_layer), GRect(0,167-2,tm,2));
@@ -111,13 +110,24 @@ static void display_time(struct tm *tick_time) {
   text_layer_set_text(text_layer4, timeText);
 }
 
-static void handle_minute_tick(struct tm *tick_time, TimeUnits units_changed) {
-  display_time(tick_time);
-}
 
-
+//static void handle_minute_tick(struct tm *tick_time, TimeUnits units_changed) {
+//  display_time(tick_time);
+//}
+static int delay_tick = 5;
 static void handle_second_tick(struct tm *tick_time, TimeUnits units_changed) {
-  update_progress();
+  if (elapsed < duration + 60)
+  {
+    elapsed++;
+    update_progress();
+  }
+  delay_tick++;
+  if (delay_tick >= 5)
+  {
+    delay_tick = 0;
+    update_progress();
+    display_time(tick_time);
+  }
 }
 
 
@@ -395,8 +405,8 @@ static void init(void) {
   //accel_tap_service_subscribe(&accel_tap_handler);
   //accel_tap_service_unsubscribe();
 
-  tick_timer_service_subscribe(MINUTE_UNIT, handle_minute_tick);
   tick_timer_service_subscribe(SECOND_UNIT, handle_second_tick);
+  //tick_timer_service_subscribe(MINUTE_UNIT, handle_minute_tick);
 
   const uint32_t inbound_size = 256;
   const uint32_t outbound_size = 64;
