@@ -15,23 +15,50 @@ static TextLayer *text_layer4;
 static TextLayer *artist_text_layer;
 static TextLayer *title_text_layer;
 static BitmapLayer *album_art_layer;
-static InverterLayer *progress_layer;
+static Layer *progress_layer;
+
+static void progress_layer_draw(Layer *layer, GContext *ctx) {
+  GRect bounds = layer_get_bounds(layer);
+
+  // Draw a white filled rectangle with sharp corners
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_fill_rect(ctx, bounds, 0, GCornerNone);
+
+  // Draw a white filled circle a radius of half the layer height
+  //graphics_context_set_fill_color(ctx, GColorWhite);
+  //const int16_t half_h = bounds.size.h / 2;
+  //graphics_fill_circle(ctx, GPoint(half_h, half_h), half_h);
+}
+
+#ifdef PBL_COLOR
+  #define ppby 1
+#else
+  #define ppby 1 //8
+#endif
+
 //static GBitmap *album_art_bitmap;
-static uint8_t album_art_data[IMAGE_SIZE*IMAGE_SIZE/8] = {0};
+static uint8_t *album_art_data;//[IMAGE_SIZE*IMAGE_SIZE / ppby];
 
 // Timers can be canceled with `app_timer_cancel()`
-static AppTimer *timer;
-static bool visible;
+//static AppTimer *timer;
+//static bool visible;
 
-static const GBitmap album_art_bitmap = {
+static GBitmap *album_art_bitmap;
+static GRect album_art_bitmap_bounds;
+
+/*(GRect) {
+  .origin = { .x = 0, .y = 0 },
+  .size = { .w = IMAGE_SIZE, .h = IMAGE_SIZE },
+};*/
+/* = {
   .addr = album_art_data,
-  .row_size_bytes = (IMAGE_SIZE / 8),
+  .row_size_bytes = (IMAGE_SIZE / ppby),
   .info_flags = 0x1000,
   .bounds = {
     .origin = { .x = 0, .y = 0 },
     .size = { .w = IMAGE_SIZE, .h = IMAGE_SIZE },
   },
-};
+};*/
 
 #define KEY_ACTION 1
 #define KEY_STATUS 5
@@ -46,7 +73,8 @@ static const GBitmap album_art_bitmap = {
 static int timer_left = 0;
 static bool fade_state = true;
 static void timer_callback(void *context) {
-  return;
+  //return;
+  /*
   const uint32_t timeout_ms = 250;
   if (timer_left > 0) {
     timer_left -= timeout_ms;
@@ -59,7 +87,9 @@ static void timer_callback(void *context) {
   layer_set_hidden((Layer*)text_layer3,fade_state);
   layer_set_hidden((Layer*)text_layer4,fade_state);
   layer_set_hidden((Layer*)text_layer,fade_state);
+  */
 }
+
 
 static void start_fade_timer(int duration)
 {
@@ -93,7 +123,7 @@ static void update_progress()
     if (elapsed > duration + 60)
       tm = 0;
   }
-  layer_set_frame(inverter_layer_get_layer(progress_layer), GRect(0,167-2,tm,2));
+  layer_set_frame(progress_layer, GRect(0,167-2,tm,2));
 }
 
 static void display_time(struct tm *tick_time) {
@@ -177,20 +207,30 @@ static void in_received_handler(DictionaryIterator *received, void *context) {
     value = dict_find(received, IMAGE_DATA);
     if (!!value && value->key == IMAGE_DATA)
     {
-      if (i_start == 0) persist_write_int(99, value->length);
 
+      #ifndef PBL_COLOR
+      if (i_start == 0) persist_write_int(99, value->length);
       uint8_t byte_array[256];
+      #endif
+
       for(uint32_t i = 0; i < value->length; i++)
       {
-        album_art_data[i_start+i] = (uint8_t)value->value->data[i];
+        album_art_data[i_start + i] = (uint8_t)value->value->data[i];
+        #ifndef PBL_COLOR
         byte_array[i] = (uint8_t)value->value->data[i];
+        #endif
       }
+
+      #ifndef PBL_COLOR
       int l = persist_write_data(i_start+100, byte_array, value->length);
-      //app_log(APP_LOG_LEVEL_INFO,"",1, "WRITE! row:%i %i bytes of %i", (int)i_start, l, (int)value->length);
+      app_log(APP_LOG_LEVEL_INFO,"",1, "WRITE! row:%i bytes: %i len:%i", (int)i_start, l, (int)value->length);
+      #endif
+
+      //app_log(APP_LOG_LEVEL_INFO,"",1, "WRITE! row:%i len:%i", (int)i_start, (int)value->length);
 
       //layer_mark_dirty((Layer*)album_art_layer);
       //light_enable_interaction();
-      if (value->length+i_start>=IMAGE_SIZE*IMAGE_SIZE/8)
+      if (value->length + i_start >= IMAGE_SIZE * IMAGE_SIZE / ppby)
       {
         start_fade_timer(5000);
         layer_mark_dirty((Layer*)album_art_layer);
@@ -206,12 +246,12 @@ static void in_dropped_handler(AppMessageResult reason, void *context) {
   // incoming message dropped
 }
 
-
-
+/**
+ * Interaction handlers
+ *
 static void accel_tap_handler(AccelAxisType axis, int32_t direction) {
   //text_layer_set_text(text_layer, "tap");
 }
-
 
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
   DictionaryIterator *iter;
@@ -242,6 +282,7 @@ static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
 
   app_message_outbox_send();
 }
+
 
 static void down_long_click_handler(ClickRecognizerRef recognizer, void *context) {
   DictionaryIterator *iter;
@@ -281,11 +322,22 @@ static void click_config_provider(void *context) {
   window_long_click_subscribe(BUTTON_ID_SELECT, 700, select_long_click_handler, NULL);
   window_long_click_subscribe(BUTTON_ID_DOWN, 700, down_click_handler, NULL);
 }
+*/
 
 static void window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
 
+
+  #ifdef PBL_COLOR
+  album_art_bitmap = gbitmap_create_blank(GSize(IMAGE_SIZE,IMAGE_SIZE), GBitmapFormat8Bit);
+  #else
+  album_art_bitmap = gbitmap_create_blank(GSize(IMAGE_SIZE,IMAGE_SIZE), GBitmapFormat1Bit);
+  #endif
+
+  album_art_data = gbitmap_get_data(album_art_bitmap);
+
+  #ifndef PBL_COLOR
   if(persist_exists(99))
   {
     int i_start = 0;
@@ -293,10 +345,10 @@ static void window_load(Window *window) {
     uint8_t byte_array[256];
     while(persist_exists(100+i_start))
     {
-      if(i_start+len > (IMAGE_SIZE*IMAGE_SIZE/8))
-        len = (IMAGE_SIZE*IMAGE_SIZE/8) - i_start;
+      if(i_start+len > (IMAGE_SIZE*IMAGE_SIZE/ppby))
+        len = (IMAGE_SIZE*IMAGE_SIZE/ppby) - i_start;
       if (len <= 0) break;
-      int l = persist_read_data(100+i_start, &byte_array[0], len);
+      /*int l = */persist_read_data(100+i_start, &byte_array[0], len);
       //app_log(APP_LOG_LEVEL_INFO,"",1, "READ! row:%i %i bytes of %i", i_start, l, len);
 
       for(int i = 0; i < len; i++)
@@ -305,10 +357,37 @@ static void window_load(Window *window) {
       i_start += len;
     }
   }
+  #endif
+
+  //album_art_bitmap_bounds = GRect(0, 0, IMAGE_SIZE, IMAGE_SIZE);
+
+
+
+  //album_art_bitmap_bounds = GRect(0, 0, IMAGE_SIZE, IMAGE_SIZE);
+  //gbitmap_set_bounds(album_art_bitmap, album_art_bitmap_bounds);
+
+  /*GRect bitmapSize = (GRect) {
+    .origin = { .x = 0, .y = 0 },
+    .size = { .w = IMAGE_SIZE, .h = IMAGE_SIZE },
+};*/
+  album_art_bitmap_bounds = GRect(0, 0, IMAGE_SIZE, IMAGE_SIZE);
+  gbitmap_set_bounds(album_art_bitmap, album_art_bitmap_bounds);
+
+  //album_art_bitmap->info_flags = 0x1000;
+
+  /* = {
+    .addr = album_art_data,
+    .row_size_bytes = (IMAGE_SIZE / ppby),
+    .info_flags = 0x1000,
+    .bounds = {
+      .origin = { .x = 0, .y = 0 },
+      .size = { .w = IMAGE_SIZE, .h = IMAGE_SIZE },
+    },
+  };*/
 
 
   album_art_layer = bitmap_layer_create((GRect) { .origin = { (144-DISPLAY_SIZE)/2, 0 }, .size = { DISPLAY_SIZE, DISPLAY_SIZE } });
-  bitmap_layer_set_bitmap(album_art_layer,&album_art_bitmap);
+  bitmap_layer_set_bitmap(album_art_layer, album_art_bitmap);
   layer_add_child(window_layer, bitmap_layer_get_layer(album_art_layer));
 
   artist_text_layer = text_layer_create((GRect) { .origin = { 1, 128 }, .size = { bounds.size.w-1, 30 } });
@@ -356,8 +435,10 @@ static void window_load(Window *window) {
   text_layer_set_background_color(text_layer, GColorClear);
   text_layer_set_text_color(text_layer, GColorWhite);
 
-  progress_layer = inverter_layer_create((GRect) { .origin = { 0, 0 }, .size = { bounds.size.w / 2, 50 } });
-  layer_add_child(window_layer, inverter_layer_get_layer(progress_layer));
+  progress_layer = layer_create((GRect) { .origin = { 0, 0 }, .size = { bounds.size.w / 2, 50 } });
+  layer_set_update_proc(progress_layer, progress_layer_draw);
+
+  layer_add_child(window_layer, progress_layer);
   update_progress();
 
   text_layer_set_font(text_layer, fonts_get_system_font(FONT_KEY_ROBOTO_BOLD_SUBSET_49));
@@ -408,8 +489,8 @@ static void init(void) {
   tick_timer_service_subscribe(SECOND_UNIT, handle_second_tick);
   //tick_timer_service_subscribe(MINUTE_UNIT, handle_minute_tick);
 
-  const uint32_t inbound_size = 256;
-  const uint32_t outbound_size = 64;
+  const uint32_t inbound_size = 512;
+  const uint32_t outbound_size = 96;
   app_message_open(inbound_size, outbound_size);
 
   window = window_create();
@@ -418,8 +499,12 @@ static void init(void) {
     .load = window_load,
     .unload = window_unload,
   });
+
+#ifndef PBL_COLOR
   window_set_fullscreen(window, true);
   window_set_status_bar_icon(window, gbitmap_create_with_resource(RESOURCE_ID_TINY_LASTFM));
+#endif
+
   window_set_background_color(window, GColorBlack);
   const bool animated = true;
   window_stack_push(window, animated);

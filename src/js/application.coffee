@@ -1,3 +1,22 @@
+isColorDisplay = false
+if (Pebble.getActiveWatchInfo)
+  isColorDisplay = Pebble.getActiveWatchInfo().platform != "aplite"
+
+window.isColorDisplay = isColorDisplay
+lastUrl = ""
+
+window.getDisplayMode = ->
+  display_mode = window.localStorage.getItem("display_mode")
+  display_mode = (if isColorDisplay then "color_dithered" else "monochrome_dithered") unless display_mode
+  return display_mode
+
+window.setDisplayMode = (display_mode) ->
+  if (window.getDisplayMode() != display_mode)
+    setTimeout =>
+      window.updateimage(lastUrl)
+    , 250
+  window.localStorage.setItem("display_mode", display_mode)
+
 window.getUsername = ->
   username = window.localStorage.getItem("lastfm.username")
   username = "" unless username
@@ -48,21 +67,36 @@ for i in [0...256] by 1
   lumG[i] = i*0.587
   lumB[i] = i*0.114
 
-window.monochrome = (imageData, threshold, type) ->
+window.dither = (imageData, threshold, type, grayscale) ->
   imageDataLength = imageData.data.length;
 
-  # Greyscale luminance (sets r pixels to luminance of rgb * alpha)
-  for i in [0..imageDataLength] by 4
-    imageData.data[i] = Math.floor((lumR[imageData.data[i]] + lumG[imageData.data[i+1]] + lumB[imageData.data[i+2]]) * (imageData.data[i+3]/256))
+  # default grayscale to true
+  if (typeof grayscale == "undefined")
+    grayscale = true
+
+  if (grayscale)
+    # Grayscale luminance (sets r pixels to luminance of rgb * alpha)
+    for i in [0..imageDataLength] by 4
+      imageData.data[i] = Math.floor((lumR[imageData.data[i]] + lumG[imageData.data[i+1]] + lumB[imageData.data[i+2]]) * (imageData.data[i+3]/256))
+  else
+    # Applies alpha value to image colors
+    for i in [0..imageDataLength] by 4
+      imageData.data[i] = Math.floor(imageData.data[i] * (imageData.data[i+3]/256))
+      imageData.data[i+1] = Math.floor(imageData.data[i+1] * (imageData.data[i+3]/256))
+      imageData.data[i+2] = Math.floor(imageData.data[i+2] * (imageData.data[i+3]/256))
 
   w = imageData.width;
-  #var newPixel, err;
 
-  for currentPixel in [0..imageDataLength] by 4
+  step = 4
+  if (!grayscale)
+    step = 1
+
+  for currentPixel in [0..imageDataLength] by step
 
     if (type == "none")
       # No dithering
-      imageData.data[currentPixel] = if imageData.data[currentPixel] < threshold then 0 else 255;
+      if grayscale
+        imageData.data[currentPixel] = if imageData.data[currentPixel] < threshold then 0 else 255;
     else if (type == "bayer")
       # 4x4 Bayer ordered dithering algorithm
       x = currentPixel/4 % w;
@@ -71,7 +105,10 @@ window.monochrome = (imageData, threshold, type) ->
       imageData.data[currentPixel] = if (map < threshold) then 0 else 255;
     else if (type == "floydsteinberg")
       # Floyd–Steinberg dithering algorithm
-      newPixel = if imageData.data[currentPixel] < 129 then 0 else 255;
+
+      #newPixel = if imageData.data[currentPixel] < threshold then 0 else 255;
+      newPixel = Math.floor(Math.round(imageData.data[currentPixel]/64)*64)
+
       err = Math.floor((imageData.data[currentPixel] - newPixel) / 16);
       imageData.data[currentPixel] = newPixel;
 
@@ -92,16 +129,19 @@ window.monochrome = (imageData, threshold, type) ->
       imageData.data[currentPixel + 4*w + 4 ] += err;
       imageData.data[currentPixel + 8*w     ] += err;
 
-    # Set g and b pixels equal to r
-    imageData.data[currentPixel + 1] = imageData.data[currentPixel + 2] = imageData.data[currentPixel]
+    if (grayscale)
+      # Set g and b pixels equal to r
+      imageData.data[currentPixel + 1] = imageData.data[currentPixel + 2] = imageData.data[currentPixel]
+      imageData.data[currentPixel + 3] = 255
+    else
+      if (currentPixel % 4 == 3)
+        imageData.data[currentPixel] = 255
 
   return imageData;
 
-
-
-
 window.updateimage = (image_url) ->
   return if !image_url || image_url == ""
+  lastUrl = image_url
   console.log(image_url)
   image = new Image()
   image.onload = () =>
@@ -126,7 +166,25 @@ window.updateimage = (image_url) ->
         imageData.data[y*4*size+x*4+3] = val
         imageData.data[y2*4*size+x*4+3] = val
 
-    imageData = window.monochrome(imageData,127,"floydsteinberg")
+    switch window.getDisplayMode()
+      when "color_dithered"
+        imageData = window.dither(imageData, 127, "floydsteinberg", false)
+      when "color"
+        imageData = window.dither(imageData, 127, "none", false)
+      when "grayscale_dithered"
+        imageData = window.dither(imageData, 127, "floydsteinberg", true)
+      when "monochrome_dithered"
+        imageData = window.dither(imageData, 127, "floydsteinberg", true)
+        imageData = window.dither(imageData, 127, "none", true)
+      when "monochrome"
+        imageData = window.dither(imageData, 127, "none", true)
+      else
+        if isColorDisplay
+          imageData = window.dither(imageData, 127, "floydsteinberg", false)
+        else
+          imageData = window.dither(imageData, 127, "floydsteinberg", true)
+          imageData = window.dither(imageData, 127, "none", true)
+
 
     window.queue_data = []
     window.queue_waiting = false
@@ -138,27 +196,39 @@ window.updateimage = (image_url) ->
     for row in [0...size] by 1
       b = 0
       for i in [0...size] by 1
-        grayscale = imageData.data[ii]
-        ii+=4
-        row_data[v] = 0 unless row_data[v] > 0 && row_data[v] <= 255
-        if grayscale > 128
-          row_data[v] += Math.pow(2,b)
-        b++
-        if b > 7
+
+        if isColorDisplay
+          _r = Math.floor(imageData.data[ii+0] / 256 * 4)
+          _g = Math.floor(imageData.data[ii+1] / 256 * 4)
+          _b = Math.floor(imageData.data[ii+2] / 256 * 4)
+          _a = 4
+
+          row_data.push(_b + _g*2*2 + _r*2*2*2*2 + _a*2*2*2*2*2*2)
           v++
-          b = 0
+        else
+          grayscale = imageData.data[ii]
+          row_data[v] = 0 unless row_data[v] > 0 && row_data[v] <= 255
+          if grayscale > 128
+            row_data[v] += Math.pow(2, b)
+          b++
+          if b > 7
+            v++
+            b = 0
+        ii += 4
 
-      if row_data.length >= 200
-        console.log("row:#{row_start} #{row_data.length} bytes")
+      if (isColorDisplay && row_data.length >= size * 3 - 1) || (!isColorDisplay && row_data.length >= 200)
+        #console.log("row:#{row_start} #{row_data.length} bytes")
         window.queue_data.push {row_index: row_start, row_data}
-
-        row_start = (row+1) * (size/8)
+        if isColorDisplay
+          row_start = (row + 1) * (size)
+        else
+          row_start = (row + 1) * (size / 8)
         row_data = []
         v = 0
         b = 0
 
     if row_data.length > 0
-      console.log("row:#{row_start} #{row_data.length} bytes")
+      #console.log("row:#{row_start} #{row_data.length} bytes")
       window.queue_data.push {row_index: row_start, row_data}
 
   image.src = image_url
@@ -180,7 +250,7 @@ window.updateTrack = (data) ->
   req = "http://ws.audioscrobbler.com/2.0/?method=track.getinfo&api_key=#{SecretConfig.lastfm_api_key}&mbid=#{data.currentTrack.mbid}&format=json"
   if data.currentTrack.mbid == ""
     req = "http://ws.audioscrobbler.com/2.0/?method=track.getinfo&api_key=#{SecretConfig.lastfm_api_key}&artist=#{data.currentTrack.artist}&track=#{data.currentTrack.title}&format=json"
-  console.log req
+  console.log req.replace(SecretConfig.lastfm_api_key, "HIDDEN_API_KEY")
   $.ajax
     cache: false
     url: req
@@ -287,7 +357,7 @@ queue = ->
     if window.queue_data.length > 0
       window.queue_waiting = true
       data = window.queue_data[0]
-      console.log("TRY row:#{data.row_index} #{data.row_data.length} bytes")
+      #console.log("TRY row:#{data.row_index} #{data.row_data.length} bytes")
       Pebble.sendAppMessage data, =>
         if window.queue_data[0] && window.queue_data[0].row_index == data.row_index
           console.log("SENT row:#{data.row_index} #{data.row_data.length} bytes")
@@ -301,6 +371,7 @@ queue = ->
 Pebble.addEventListener "webviewclosed", (e) ->
   data = JSON.parse(e.response)
   window.setUsername(data.lastfm_username)
+  window.setDisplayMode(data.display_mode)
   window.interval_count == window.getUpdateRate() - 1;
 
 Pebble.addEventListener "showConfiguration", (e) ->
@@ -309,18 +380,63 @@ Pebble.addEventListener "showConfiguration", (e) ->
     <script>
       function submit()
       {
-        data = { lastfm_username: document.getElementById('lastfm_username').value };
+        var e = document.getElementById("display_mode");
+        var display_mode = e.options[e.selectedIndex].value;
+
+        data = { lastfm_username: document.getElementById('lastfm_username').value, display_mode: display_mode };
         window.location.href='pebblejs://close#' + encodeURIComponent(JSON.stringify(data));
       }
     </script>
+    <style>
+      h1 {
+        background-color: #eeeeee;
+        border-bottom: 1px solid #dddddd;
+        padding: 0.2em;
+        text-align: center;
+      }
+      h3 {
+        margin-bottom: 0px;
+      }
+      body, #lastfm_username, #display_mode {
+        line-height: 1.5;
+        padding: 0px;
+        margin: 0px;
+      }
+      .main-form {
+        font-size: 1.5em;
+        line-height: 1.5;
+        text-align: center;
+      }
+      button, select, input {
+        font-size: 1.2em;
+        padding: 0.2em 0.8em;
+      }
+      input {
+          width: 80%;
+      }
+    </style>
   </head>
   <body>
-    <h1>Last.fm account</h1>
-    Username: <input type="text" id="lastfm_username" value="#{window.getUsername()}">
-    <br>
+    <h1>Watch.fm Settings</h1>
+    <div class="main-form">
+
+    <h3>last.fm Username</h3>
+    <input type="text" id="lastfm_username" value="#{window.getUsername()}">
+    <hr>
+
+    <h3>Display Mode</h3>
+    <select id="display_mode">
+      <option #{if !window.isColorDisplay then 'style="display:none"'} value="color_dithered" #{ if window.getDisplayMode() == "color_dithered" then 'selected="selected"' }>Color Dithered</option>
+      <option #{if !window.isColorDisplay then 'style="display:none"'} value="color" #{ if window.getDisplayMode() == "color" then 'selected="selected"' }>Color</option>
+      <option #{if !window.isColorDisplay then 'style="display:none"'} value="grayscale_dithered" #{ if window.getDisplayMode() == "grayscale_dithered" then 'selected="selected"' }>Grayscale</option>
+      <option value="monochrome_dithered" #{ if window.getDisplayMode() == "monochrome_dithered" then 'selected="selected"' }>Monochrome Dithered</option>
+      <option value="monochrome" #{ if window.getDisplayMode() == "monochrome" then 'selected="selected"' }>Monochrome</option>
+    </select>
+    <hr>
     <button onClick="submit()" value="Save">
       Save
     </button>
+    </div>
   </body>
   </html>"""
   Pebble.openURL("data:text/html;charset=utf-8,"+encodeURIComponent(page)+"<!--.html")

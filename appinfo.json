@@ -4,8 +4,13 @@
   "longName": "watch-fm",
   "capabilities": ["configurable"],
   "companyName": "bitbased.net",
-  "versionCode": 5,
-  "versionLabel": "1.0.5",
+  "versionCode": 6,
+  "versionLabel": "2.0",
+  "sdkVersion": "3",
+  "targetPlatforms": [
+    "aplite",
+    "basalt"
+  ],
   "watchapp": {
     "watchface": true
   },
