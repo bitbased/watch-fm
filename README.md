@@ -2,6 +2,10 @@
 
 A last.fm album art watchface for the pebble smart watch. Watches your last.fm recently played stream and updates current track and album art.
 
+![screenshot](https://cloud.githubusercontent.com/assets/1801892/8323613/7081fca4-1a0c-11e5-9dc1-224677e78e3f.png)
+
+Download: https://apps.getpebble.com/en_US/application/5348549aa093cd29b2000051
+
 ## Build Instructions
 
 Clone this repository in an appropriate directory:
